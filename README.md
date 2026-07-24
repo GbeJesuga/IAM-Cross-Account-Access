@@ -267,3 +267,7 @@ This is the single point of failure in a hub-and-spoke trust model: since every 
 - [AWS: Tutorial — Delegate Access Across AWS Accounts Using IAM Roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_cross-account-with-roles.html)
 - [AWS: The Confused Deputy Problem](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html)
 - [AWS Organizations Best Practices](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_best-practices.html)
+
+## Acknowledgements
+
+The project brief and structure for this build were adapted from [taimurijlal](https://github.com/taimurijlal)'s cloud security project guides. The implementation, architecture decisions, troubleshooting, and write-up above are my own work.
