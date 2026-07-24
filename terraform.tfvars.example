@@ -1,0 +1,9 @@
+# Copy this file to terraform.tfvars and fill in your real values.
+# terraform.tfvars should NOT be committed to git if it ever contains anything
+# sensitive — for account IDs alone it's low-risk, but it's still good habit
+# to .gitignore it, since people often add secrets to tfvars files later.
+
+security_account_id = "111111111111" # your Management/Security account ID
+workload_account_id = "222222222222" # your Workload account ID
+region               = "us-east-1"
+alert_email          = "you@example.com" # where AssumeRole alerts get sent

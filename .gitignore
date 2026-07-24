@@ -1,0 +1,7 @@
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+crash.log
+Project-1-IAM-Cross-Account-Access.md
