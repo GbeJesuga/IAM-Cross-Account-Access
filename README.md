@@ -1,6 +1,6 @@
 # Project 1: IAM Cross-Account Access
 
-Building a production-style cross-account IAM pattern on AWS with Terraform — a scoped audit role in a Workload account, assumable only from a Security account, with real-time monitoring on top.
+Building a production-style cross-account IAM pattern on AWS with Terraform; a scoped audit role in a Workload account, assumable only from a Security account, with real-time monitoring on top.
 
 ![Status](https://img.shields.io/badge/status-complete-brightgreen) ![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.5-623CE4) ![AWS](https://img.shields.io/badge/AWS-IAM%20%7C%20STS%20%7C%20EventBridge-orange)
 
@@ -19,7 +19,7 @@ Building a production-style cross-account IAM pattern on AWS with Terraform — 
 
 ## Why This Project
 
-Almost every real AWS environment is multi-account, and almost every real security incident I've read about involving IAM comes down to permissions being either too broad, poorly monitored, or both. I built this project to actually implement — not just read about — the pattern most production AWS environments use to let a central security/audit function access other accounts safely: cross-account role assumption, least-privilege scoping, and monitoring on top of it.
+Almost every real AWS environment is multi-account, and almost every real security incident I've read about involving IAM comes down to permissions being either too broad, poorly monitored, or both. I built this project to actually implement (not just read about) the pattern most production AWS environments use to let a central security/audit function access other accounts safely: cross-account role assumption, least-privilege scoping, and monitoring on top of it.
 
 ## Architecture
 
@@ -45,23 +45,23 @@ Almost every real AWS environment is multi-account, and almost every real securi
 └────────────────────────────┘
 ```
 
-I used one AWS Organization with two accounts — a **Security account** (the management account, where my IAM user lives) and a **Workload account** (the account being audited). I kept the whole thing at effectively $0 in AWS cost: IAM, Organizations, and STS are free regardless of usage, and the only resource with any real cost, a small CloudTrail S3 bucket, runs to a few cents a month at most for the volume of events this project generates.
+I used one AWS Organization with two accounts; a **Security account** (the management account, where my IAM user lives) and a **Workload account** (the account being audited). I kept the whole thing at effectively $0 in AWS cost: IAM, Organizations, and STS are free regardless of usage, and the only resource with any real cost, a small CloudTrail S3 bucket, runs to a few cents a month at most for the volume of events this project generates.
 
 ## The Problem, My Solution, and the Trade-offs I Made
 
-**The problem:** granting one account (or one person) access into another account is a common need, but it's also one of the easiest places to introduce a security hole — over-broad trust policies, standing credentials that never expire, or access nobody's watching.
+**The problem:** granting one account (or one person) access into another account is a common need, but it's also one of the easiest places to introduce a security hole; over-broad trust policies, standing credentials that never expire, or access nobody's watching.
 
-**My solution:** I implemented AWS's recommended pattern for this — a role in the Workload account (`SecurityAuditRole`) with a trust policy that names exactly one principal (the Security account) and requires a matching External ID on every assumption attempt. I scoped the role's permissions to AWS's managed `SecurityAudit` policy rather than writing something broader, and I backed the whole thing with real-time monitoring so that every assumption of the role generates an email alert.
+**My solution:** I implemented AWS's recommended pattern for this; a role in the Workload account (`SecurityAuditRole`) with a trust policy that names exactly one principal (the Security account) and requires a matching External ID on every assumption attempt. I scoped the role's permissions to AWS's managed `SecurityAudit` policy rather than writing something broader, and I backed the whole thing with real-time monitoring so that every assumption of the role generates an email alert.
 
 **Trade-offs I took:**
-- I used a **single-region CloudTrail Trail** rather than a multi-region one, to keep both cost and setup complexity down. This means I'd only detect `AssumeRole` calls made against the `eu-west-1` STS endpoint — acceptable for a portfolio project scoped to one region, but I'd use a multi-region trail in a real production setup.
-- I used **local Terraform state** rather than a remote backend (e.g., an S3 bucket + DynamoDB lock table). This is fine for a solo project with one operator, but I'm aware it wouldn't hold up for a team — concurrent applies would risk state corruption without a shared, locked backend.
+- I used a **single-region CloudTrail Trail** rather than a multi-region one, to keep both cost and setup complexity down. This means I'd only detect `AssumeRole` calls made against the `eu-west-1` STS endpoint; acceptable for a portfolio project scoped to one region, but I'd use a multi-region trail in a real production setup.
+- I used **local Terraform state** rather than a remote backend (e.g., an S3 bucket + DynamoDB lock table). This is fine for a solo project with one operator, but I'm aware it wouldn't hold up for a team (concurrent applies would risk state corruption without a shared, locked backend).
 - I chose the **AWS-managed `SecurityAudit` policy** over writing a fully custom policy. This was a deliberate speed-vs-precision trade-off: the managed policy is broader than the exact minimum I might define by hand, but it's a well-tested, purpose-built AWS policy, and reduces the risk of me mis-scoping a hand-rolled policy and leaving an unintended gap.
 
 **Why I used the controls I used:**
-- **External ID condition** — without it, this setup would be vulnerable to the ["confused deputy" problem](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html): a third party could potentially trick a Workload-account resource into assuming a role using the Security account's identity. Requiring a shared secret value on every assumption closes that gap.
-- **A managed, read-only policy instead of a custom write-capable one** — I didn't just assume this was read-only, I tested it (see [Verification](#verification)). Least privilege is a claim that means nothing until it's demonstrated by an actual denied write attempt.
-- **Event-driven monitoring instead of just relying on the console's Event History** — I initially assumed I wouldn't need an active CloudTrail Trail, since the console shows a 90-day event history "for free." I was wrong (see [Issues I Hit](#issues-i-hit-and-how-i-fixed-them), #7) — that console view doesn't feed EventBridge, so without a real Trail, I'd have had no way to actually *react* to an assumption event, only to look one up manually after the fact.
+- **External ID condition** - without it, this setup would be vulnerable to the ["confused deputy" problem](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html): a third party could potentially trick a Workload-account resource into assuming a role using the Security account's identity. Requiring a shared secret value on every assumption closes that gap.
+- **A managed, read-only policy instead of a custom write-capable one** - I didn't just assume this was read-only, I tested it (see [Verification](#verification)). Least privilege is a claim that means nothing until it's demonstrated by an actual denied write attempt.
+- **Event-driven monitoring instead of just relying on the console's Event History** - I initially assumed I wouldn't need an active CloudTrail Trail, since the console shows a 90-day event history "for free." I was wrong (see [Issues I Hit](#issues-i-hit-and-how-i-fixed-them), #7); that console view doesn't feed EventBridge, so without a real Trail, I'd have had no way to actually *react* to an assumption event, only to look one up manually after the fact.
 
 ## Implementation Walkthrough
 
@@ -206,17 +206,17 @@ I'm including this section in full because I think the debugging process demonst
 | # | Issue | Root Cause | Fix |
 |---|-------|-----------|-----|
 | 1 | `Could not connect to the endpoint URL: "https://sts.x.amazonaws.com/"` | My AWS CLI region was accidentally set to the literal string `x` | `aws configure set region <region>` |
-| 2 | `AccessDenied` assuming `OrganizationAccountAccessRole` | My IAM user had no explicit `sts:AssumeRole` permission on that specific role ARN — `OrganizationAccountAccessRole` only trusts the management account's root by default, not individual users | Attached an inline policy granting `sts:AssumeRole` on that role's ARN |
+| 2 | `AccessDenied` assuming `OrganizationAccountAccessRole` | My IAM user had no explicit `sts:AssumeRole` permission on that specific role ARN - `OrganizationAccountAccessRole` only trusts the management account's root by default, not individual users | Attached an inline policy granting `sts:AssumeRole` on that role's ARN |
 | 3 | `AccessDenied` again, after account recreation | I'd closed and recreated my Workload account but hadn't updated the account ID everywhere it was referenced (tfvars, inline policy) | Updated the account ID consistently; reinforced why I use variables instead of hardcoded IDs |
 | 4 | Confusing `AccessDenied` from Terraform itself | My shell still had temporary STS credentials exported as environment variables from manual testing, silently overriding my normal CLI profile | Cleared the env vars (`Remove-Item Env:\AWS_ACCESS_KEY_ID, ...`) |
 | 5 | Monitoring never fired | I'd built the EventBridge rule in the Workload account, but `sts:AssumeRole` is logged by CloudTrail in the account of the **caller**, not the account owning the role | Moved all monitoring resources to the Security-account provider |
-| 6 | `AccessDenied` reading old state after switching providers | Moving resources to a different provider isn't a "move" in Terraform — the state still pointed at resources in the old account | Used `terraform state rm` to untrack the stale entries, then reapplied cleanly |
-| 7 | Still no alert email, even with the rule correctly targeted | EventBridge only receives CloudTrail events if an **active Trail** exists — the console's free 90-day Event History is a separate, view-only feature that doesn't feed EventBridge | Provisioned a real CloudTrail Trail (with a backing S3 bucket) via Terraform |
+| 6 | `AccessDenied` reading old state after switching providers | Moving resources to a different provider isn't a "move" in Terraform; the state still pointed at resources in the old account | Used `terraform state rm` to untrack the stale entries, then reapplied cleanly |
+| 7 | Still no alert email, even with the rule correctly targeted | EventBridge only receives CloudTrail events if an **active Trail** exists. The console's free 90-day Event History is a separate, view-only feature that doesn't feed EventBridge | Provisioned a real CloudTrail Trail (with a backing S3 bucket) via Terraform |
 
 ## Reflection Questions
 
 **1. Why did I choose role assumption instead of long-lived credentials?**
-Role assumption gives me temporary credentials (1 hour by default) instead of a permanent access key. My IAM user in the Security account never holds Workload-account credentials directly — only permission to *request* temporary ones, gated by the External ID condition. If my user's own credentials leaked, the blast radius stays inside the Security account.
+Role assumption gives me temporary credentials (1 hour by default) instead of a permanent access key. My IAM user in the Security account never holds Workload-account credentials directly; only permission to *request* temporary ones, gated by the External ID condition. If my user's own credentials leaked, the blast radius stays inside the Security account.
 
 **2. How would this scale to 20–100 accounts?**
 Hand-writing one Terraform config per account, like I did here, doesn't scale. I'd move to AWS Organizations + SCPs + StackSets, or a Terraform `for_each` over a list of account IDs, to deploy the same role definition consistently across every account in an OU.
@@ -225,10 +225,10 @@ Hand-writing one Terraform config per account, like I did here, doesn't scale. I
 I tested this rather than assuming it: the `SecurityAudit` policy let a read succeed but denied a write attempt outright. If I'd used a broader policy like `AdministratorAccess`, a compromise of temporary credentials could have escalated to a full account takeover instead of staying contained to read-only exposure.
 
 **4. How would I detect misuse?**
-I actually implemented this — an EventBridge rule + SNS alert, backed by a real CloudTrail Trail, which was the hardest part of this project to get right (see issues #5 and #7). A fuller production setup would extend this to failed AssumeRole attempts, assumptions from unexpected IPs, and trust-policy modification events.
+I actually implemented this; an EventBridge rule + SNS alert, backed by a real CloudTrail Trail, which was the hardest part of this project to get right (see issues #5 and #7). A fuller production setup would extend this to failed AssumeRole attempts, assumptions from unexpected IPs, and trust-policy modification events.
 
 **5. What happens if the Security Account is compromised?**
-This is the single point of failure in a hub-and-spoke trust model: since every Workload role trusts the Security account's principal, compromising the Security account gives an attacker a path into every account that trusts it. That's why I'd argue the Security account deserves the *most* hardening in a real org — enforced MFA, minimal standing IAM users, its own dedicated monitoring — not less.
+This is the single point of failure in a hub-and-spoke trust model: since every Workload role trusts the Security account's principal, compromising the Security account gives an attacker a path into every account that trusts it. That's why I'd argue the Security account deserves the *most* hardening in a real org; enforced MFA, minimal standing IAM users, and its own dedicated monitoring. Nothing less.
 
 ## Repository Structure
 
@@ -260,7 +260,7 @@ This is the single point of failure in a hub-and-spoke trust model: since every 
    ```
 5. Verify with the commands in the [Verification](#verification) section above.
 
-**Note on account IDs:** I redacted my real AWS account IDs from this README and from the committed Terraform files (they're supplied via `terraform.tfvars`, which is gitignored). Account IDs aren't strictly secret, but I treated them the way I'd treat any environment-specific config in a real project — kept out of version control by default.
+**Note on account IDs:** I redacted my real AWS account IDs from this README and from the committed Terraform files (they're supplied via `terraform.tfvars`, which is gitignored). Account IDs aren't strictly secret, but I treated them the way I'd treat any environment-specific config in a real project; kept out of version control by default.
 
 ## Further Reading
 
